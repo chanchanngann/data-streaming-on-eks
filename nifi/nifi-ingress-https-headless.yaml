@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nifi-ingress
+  namespace: nifi
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/healthcheck-path: "/nifi/"
+    alb.ingress.kubernetes.io/healthcheck-port: "8443"
+    alb.ingress.kubernetes.io/healthcheck-protocol: "HTTPS"
+    alb.ingress.kubernetes.io/ssl-redirect: "443" # redirect http to https
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+spec:
+  ingressClassName: alb
+  tls:
+  - hosts:
+    - rachel.nifi.com
+    secretName: tls-secret
+  rules:
+  - host: rachel.nifi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nifi-svc-headless
+            port:
+              number: 443

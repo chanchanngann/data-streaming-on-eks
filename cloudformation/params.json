@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "ClusterName",
+    "ParameterValue": "MyEKSCluster"
+  },
+  {
+    "ParameterKey": "UserLocation",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "KeyName",
+    "ParameterValue": "xxxxxxxx"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-xxxxxxxxx"
+  },
+  {
+    "ParameterKey": "ControlPlaneSecurityGroup",
+    "ParameterValue": "sg-xxxxxxxxx"
+  },
+  {
+    "ParameterKey": "PrivateSubnetIds",
+    "ParameterValue": "subnet-xxxxx,subnet-xxxxx"
+  }
+]
