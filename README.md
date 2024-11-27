@@ -1,31 +1,36 @@
-# data-streaming-on-k8s
-# Intro
+# Data Streaming on EKS (Kubernetes)
+
+## Intro
 This exercise is to build a data streaming pipeline using Kubernetes via AWS EKS. The components of the data pipeline are:
 - Nifi
 - Kafka
 - Spark Streaming
 - Snowflake
 - ...
-# Architecture
+## Architecture
 
 Data flow:
-![](../images/flow2.jpg) 
+![dataflow](/images/flow2.jpg) 
 
 AWS components:
-![](../images/flow1.jpg)
+![architecture](/images/flow1.jpg)
+
 **VPC:**
     - **4 subnets (2 public, 2 private)** are set up for high availability and redundancy across 2 different Availability Zones (AZ).
     - **Internet Gateway (IGW)** enables internet connectivity for resources in the public subnets.
 	- The EKS cluster spans across 4 subnets (2 public + 2 private subnets).
+
 **Public Subnets:**
 	- used for internet-facing resources.
 	- **Application load balancer (ALB)** gets direct internet access through IGW.
 	- **NAT Gateway** to allow internet access for the resources in the private subnets. For example, EBS CSI driver requires outbound internet access to interact with AWS API to provision EBS volumes; load balancer controller communicates with AWS API to provision ALB.
+
 **Private Subnets:**
 	- to ensure **Node groups** (k8s worker nodes) are not exposed directly to the internet.
 	- **Application pods** (Nifi, Kafka, Spark) are deployed on the private worker nodes
 	- Common resources **EBS CSI driver pods** and **load balancer controller pods** are also deployed on the private worker nodes.
-# Prerequisites
+
+## Prerequisites
 Install the followings in advance.
 - aws CLI
 - eksctl
@@ -61,7 +66,7 @@ kubectl apply -f aws-auth-cm.yaml
 
 kubectl get nodes --watch
 ```
----
+
 # Part 2 - EBS CSI driver and Load Balancer Controller
 ### EBS CSI driver
 To enable Dynamic Volume Provisioning, install EBS CSI driver in advance.
@@ -122,7 +127,7 @@ Failed deploy model due to operation error Elastic Load Balancing v2: DescribeLi
 ```
 Details later.
 
----
+
 # Part 3 - Nifi
 Set up a standalone Nifi application and here I am gonna use HTTPS approach to access Nifi.
 My hostname is `rachel.nifi.com`.
