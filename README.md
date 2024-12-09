@@ -9,22 +9,26 @@ This exercise is to build a data streaming pipeline using Kubernetes via AWS EKS
 # Architecture
 
 Data flow:
-![](../images/flow2.jpg) 
+![](/images/flow2.jpg) 
 
 AWS components:
-![](../images/flow1.jpg)
+![](/images/flow1.jpg)
+
 **VPC:**
-    - **4 subnets (2 public, 2 private)** are set up for high availability and redundancy across 2 different Availability Zones (AZ).
-    - **Internet Gateway (IGW)** enables internet connectivity for resources in the public subnets.
-	- The EKS cluster spans across 4 subnets (2 public + 2 private subnets).
+- **4 subnets (2 public, 2 private)** are set up for high availability and redundancy across 2 different Availability Zones (AZ).
+- **Internet Gateway (IGW)** enables internet connectivity for resources in the public subnets.
+- The EKS cluster spans across 4 subnets (2 public + 2 private subnets).
+
 **Public Subnets:**
-	- used for internet-facing resources.
-	- **Application load balancer (ALB)** gets direct internet access through IGW.
-	- **NAT Gateway** to allow internet access for the resources in the private subnets. For example, EBS CSI driver requires outbound internet access to interact with AWS API to provision EBS volumes; load balancer controller communicates with AWS API to provision ALB.
+- used for internet-facing resources.
+- **Application load balancer (ALB)** gets direct internet access through IGW.
+- **NAT Gateway** to allow internet access for the resources in the private subnets. For example, EBS CSI driver requires outbound internet access to interact with AWS API to provision EBS volumes; load balancer controller communicates with AWS API to provision ALB.
+
 **Private Subnets:**
-	- to ensure **Node groups** (k8s worker nodes) are not exposed directly to the internet.
-	- **Application pods** (Nifi, Kafka, Spark) are deployed on the private worker nodes
-	- Common resources **EBS CSI driver pods** and **load balancer controller pods** are also deployed on the private worker nodes.
+- to ensure **Node groups** (k8s worker nodes) are not exposed directly to the internet.
+- **Application pods** (Nifi, Kafka, Spark) are deployed on the private worker nodes
+- Common resources **EBS CSI driver pods** and **load balancer controller pods** are also deployed on the private worker nodes.
+
 # Prerequisites
 Install the followings in advance.
 - aws CLI
@@ -61,7 +65,8 @@ kubectl apply -f project_folder/auth/aws-auth-cm.yaml
 
 kubectl get nodes --watch
 ```
-![](../images/nodes.PNG)
+
+![](/images/nodes.png)
 
 ---
 # Part 2 - EBS CSI driver and Load Balancer Controller
@@ -118,7 +123,8 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller  -n k
 ```
 kubectl get deployment -n kube-system 
 ```
-![](../images/controllers.PNG)
+
+![](/images/controllers.png)
 
 ### Troubleshoot
 Permission error: Missing IAM policies for Load Balancer Controller
@@ -164,16 +170,19 @@ openssl req -new -x509 -key tls.key -out tls_r.cert -days 360 -subj "/CN=rachel.
 ```
 kubectl apply -f nifi/
 ```
-![](../images/nifi_objects.PNG)
+
+![](/images/nifi_objects.png)
+
 4. Review the setup and copy username and password from the pod logs
 ```
 kubectl -n nifi get pods
 kubectl -n nifi logs nifi-0 --tail 50
 ```
-![](../images/nifi_pod.PNG)
+![](/images/nifi_pod.png)
 
 From pod logs:
-![](../images/nifi_credentials.PNG)
+
+![](/images/nifi_credentials.png)
 
 5. Get the DNS name of the ingress (ALB) and check for the public IPs of the ALB. 
 ```
@@ -195,7 +204,8 @@ Copy the IPs and the Nifi hostname to the local hosts file (located at `/etc/hos
 ```
 https://rachel.nifi.com/nifi
 ```
-![](../images/nifi_login_page.PNG)
+
+![](/images/nifi_login_page.png)
 
 
 ### Troubleshoot
