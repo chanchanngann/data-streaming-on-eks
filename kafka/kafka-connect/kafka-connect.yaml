@@ -1,0 +1,61 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  namespace: kafka
+  name: my-connect-cluster
+  annotations:
+ # use-connector-resources configures this KafkaConnect
+ # to use KafkaConnector resources to avoid
+ # needing to call the Connect REST API directly
+    strimzi.io/use-connector-resources: "true"
+spec:
+  version: 3.9.0 # compatible to connector 2.x
+  replicas: 1
+  bootstrapServers: my-cluster-kafka-bootstrap:9092
+  # tls:
+  #   trustedCertificates:
+  #     - secretName: my-cluster-cluster-ca-cert
+  #       pattern: "*.crt"
+  config:
+    group.id: my-connect-cluster
+    offset.storage.topic: my-connect-cluster-offsets
+    config.storage.topic: my-connect-cluster-configs
+    status.storage.topic: my-connect-cluster-status
+    # -1 means it will use the default replication factor configured in the broker
+    config.storage.replication.factor: -1
+    offset.storage.replication.factor: -1
+    status.storage.replication.factor: -1
+    # JSON converters for message manipulation
+    # specifies how Kafka Connect handles message serialization/deserialization.
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    # Disables embedding schemas in the JSON payload, simplifying the message format.
+    key.converter.schemas.enable: false
+    value.converter.schemas.enable: false
+    # Initializes configuration provider
+    config.providers: secrets,configmaps,env
+    config.providers.secrets.class: io.strimzi.kafka.KubernetesSecretConfigProvider
+    config.providers.configmaps.class: io.strimzi.kafka.KubernetesConfigMapConfigProvider
+    config.providers.env.class: io.strimzi.kafka.EnvVarConfigProvider
+  build:
+    output:
+      type: docker
+      image: docker.io/<username>/my-kafka-connect-cluster:v1
+      pushSecret: my-docker-secret
+    plugins: 
+      - name: snowflake-kafka-connector
+        artifacts:
+        - type: jar
+          url: https://repo1.maven.org/maven2/com/snowflake/snowflake-kafka-connector/2.5.0/snowflake-kafka-connector-2.5.0.jar
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  template:
+    pod:
+      imagePullSecrets:
+      - name: my-docker-secret
+

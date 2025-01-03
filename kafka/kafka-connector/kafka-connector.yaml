@@ -1,0 +1,43 @@
+# To use the KafkaConnector resource, you have to first enable the connector operator using
+# the strimzi.io/use-connector-resources annotation on the KafkaConnect custom resource.
+# From Apache Kafka 3.1.1 and 3.2.0, you also have to add the FileStreamSourceConnector
+# connector to the container image. You can do that using the kafka-connect-build.yaml example.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  namespace: kafka
+  name: sink-connector-snowflake
+  labels:
+    # The strimzi.io/cluster label identifies the KafkaConnect instance
+    # in which to create this connector. That KafkaConnect instance
+    # must have the strimzi.io/use-connector-resources annotation
+    # set to true.
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  class: com.snowflake.kafka.connector.SnowflakeSinkConnector
+  tasksMax: 1
+  config:
+    topics: stock
+    # snowflake config
+    snowflake.url.name: ${secrets:kafka/snowflake-credentials:url}  # "https://<account>.snowflakecomputing.com"
+    snowflake.user.name: ${secrets:kafka/snowflake-credentials:username} 
+    snowflake.private.key: ${secrets:kafka/snowflake-credentials:private_key} # unencrypted version
+    # snowflake.private.key.passphrase: ${secrets:kafka/snowflake-credentials:private_key_passphrase}
+    snowflake.database.name: "STOCK_DB"
+    snowflake.schema.name: "RAW"
+    snowflake.table: "TICKERS_KAFKA_STREAMING"
+    snowflake.role.name: "kafka_connector_role"
+    snowflake.topic2table.map: "stock:TICKERS_KAFKA_STREAMING"
+    snowflake.enable.schematization: TRUE
+    snowflake.ingestion.method: SNOWPIPE_STREAMING
+    # Converters: Configured similarly to KafkaConnect to ensure proper serialization/deserialization.
+    # key.converter: org.apache.kafka.connect.storage.StringConverter 
+    # value.converter: com.snowflake.kafka.connector.records.SnowflakeJsonConverter
+    # key.converter.schemas.enable: false
+    # value.converter.schemas.enable: false
+    # Buffer settings
+    buffer.count.records: 10000
+    buffer.size.bytes: 5000000 # 5MB.Cumulative size in bytes of records buffered in memory per the Kafka partition before sending to Snowflake.
+    buffer.flush.time: 60 # Number of seconds between buffer flushes, where the flush is from the Kafka’s memory cache to the internal stage. 
+    # Tasks
+    tasks.max: 1 # Specifies the number of tasks the connector will run. This should align with the KafkaConnect worker replicas.
