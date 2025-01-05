@@ -3,11 +3,11 @@
 This exercise focuses on building a robust data streaming pipeline deployed on Kubernetes using AWS EKS. The pipeline integrates multiple components to enable real-time data ingestion, processing, and analytics, specifically tailored for stock market data streaming:
 
 - **[Nifi](#user-content-part-3---nifi)**: Extracts stock data from the Yahoo Finance API at 1-second intervals and streams it to a Kafka topic for real-time processing.
-- **[Kafka(Strimzi)](user-content-part-4---kafka)**: A distributed and decoupled event streaming platform designed for high-throughput, fault-tolerant data ingestion and real-time analytics.
-- **[Kafka Connect(Strimzi)](user-content-c-deploy-kafka-connect)**: Facilitates seamless integration between Kafka and external systems, enabling efficient data ingestion and export through pre-built or custom connectors.
-- **[Snowflake Sink Connector for Kafka](user-content-e-deploy-kafka-connector)**: Streams data from Kafka topics into Snowflake in real time for analytics and long-term storage.
-- **[Kafka UI (Redpanda Console)](user-content-f-deploy-redpanda-console)**: Offers an intuitive interface for monitoring and managing Kafka clusters, topics, consumer groups, and messages in real time.
-- **[Snowflake](user-content-part-5---write-to-snowflake)**: A cloud-native data platform that provides scalable, secure, and high-performance capabilities for data warehousing, analytics, and sharing.
+- **[Kafka(Strimzi)](#user-content-part-4---kafka)**: A distributed and decoupled event streaming platform designed for high-throughput, fault-tolerant data ingestion and real-time analytics.
+- **[Kafka Connect(Strimzi)](#user-content-c-deploy-kafka-connect)**: Facilitates seamless integration between Kafka and external systems, enabling efficient data ingestion and export through pre-built or custom connectors.
+- **[Snowflake Sink Connector for Kafka](#user-content-e-deploy-kafka-connector)**: Streams data from Kafka topics into Snowflake in real time for analytics and long-term storage.
+- **[Kafka UI (Redpanda Console)](#user-content-f-deploy-redpanda-console)**: Offers an intuitive interface for monitoring and managing Kafka clusters, topics, consumer groups, and messages in real time.
+- **[Snowflake](#user-content-part-5---write-to-snowflake)**: A cloud-native data platform that provides scalable, secure, and high-performance capabilities for data warehousing, analytics, and sharing.
 # Architecture
 
 Data flow:
@@ -110,7 +110,7 @@ The controller manages AWS Elastic Load Balancers for the Kubernetes cluster. We
 eksctl utils associate-iam-oidc-provider --cluster MyEKSCluster --approve
 ```
 2. Download & create IAM policy required for the load balancer controller to interact with AWS.
-   (Go to [Troubleshoot](user-content-troubleshoot) section, there are missing policies in the AWS provided policy.)
+   (Go to [Troubleshoot](#user-content-troubleshoot) section, there are missing policies in the AWS provided policy.)
 ```bash
 curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
 
