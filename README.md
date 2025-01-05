@@ -33,8 +33,10 @@ Data flow:
 **Secure architecture**
 - **Ingress Traffic**: Nodes are deployed in private subnets, with Application Load Balancers (ALB) placed in public subnets to handle all incoming internet traffic. The ALB securely routes requests to applications in the private subnets, ensuring that the nodes remain isolated and are not directly exposed to the internet.
 - **Egress Traffic**: A NAT Gateway is deployed in the public subnets and associated with the route tables of the private subnets. This setup allows the nodes in private subnets to securely access the internet for outbound traffic (e.g., pulling updates or accessing APIs) while keeping them inaccessible from external networks.
+  
 # Prerequisites
 Install the followings in advance.
+
 - aws CLI
 - eksctl
 - kubectl
@@ -89,10 +91,12 @@ To enable Dynamic Volume Provisioning, install EBS CSI driver in advance.
 ```bash
 eksctl utils associate-iam-oidc-provider --cluster MyEKSCluster --approve
 ```
+
 2. Create service account. Check cloudformation stack `eksctl-MyEKSCluster-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa`.
 ```bash
 eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system --cluster MyEKSCluster  --role-name AmazonEKS_EBS_CSI_DriverRole --role-only --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy  --approve   
 ```
+
 3. Wait until the service account is ready. Then helm install EBS CSI Driver.
 ```bash
 helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
@@ -101,6 +105,7 @@ helm repo update
 
 helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver --namespace kube-system  --set serviceAccount.controller.create=false  --set serviceAccount.controller.name=ebs-csi-controller-sa
 ```
+
 ### AWS Load Balancer Controller
 The controller manages AWS Elastic Load Balancers for the Kubernetes cluster. We need this controller to help create ALB so that nifi can be accessed via ingress entry.
 
@@ -108,6 +113,7 @@ The controller manages AWS Elastic Load Balancers for the Kubernetes cluster. We
 ```bash
 eksctl utils associate-iam-oidc-provider --cluster MyEKSCluster --approve
 ```
+
 2. Download & create IAM policy required for the load balancer controller to interact with AWS.
    (Go to [Troubleshoot](#user-content-troubleshoot) section, there are missing policies in the AWS provided policy.)
 ```bash
@@ -117,10 +123,12 @@ aws iam create-policy \
 --policy-name AWSLoadBalancerControllerIAMPolicy \
 --policy-document file://project_folder/auth/iam_policy.json
 ```
-   This is the edited version: [iam_policy.json](auth/iam_policy.json).
-   After creating the IAM policy, copy the policy ARN of `AWSLoadBalancerControllerIAMPolicy` from AWS IAM.
-   
+
+This is the edited version: [iam_policy.json](auth/iam_policy.json).
+After creating the IAM policy, copy the policy ARN of `AWSLoadBalancerControllerIAMPolicy` from AWS IAM.
+
 3. Create service account. The `eksctl` command will create service account `aws-load-balancer-controller` and IAM role `AmazonEKSLoadBalancerControllerRole`. The service account will be linked with the IAM role, containing the IAM policy `AWSLoadBalancerControllerIAMPolicy`(copy the policy ARN from AWS IAM). Check the cloudformation stack `eksctl-MyEKSCluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller`.
+
 ```bash
 eksctl create iamserviceaccount  --cluster=MyEKSCluster --namespace=kube-system --name=aws-load-balancer-controller  --role-name AmazonEKSLoadBalancerControllerRole  --attach-policy-arn=arn:aws:iam::xxxxxxxx:policy/AWSLoadBalancerControllerIAMPolicy  --approve  
 ```
@@ -142,6 +150,7 @@ kubectl get deployment -n kube-system
 ![](images/04_controllers.png)
 ---
 ### Troubleshoot
+
 ##### issue # 1
 
 _What:_ Failed during `helm install aws-load-balancer-controller...` 
@@ -170,6 +179,7 @@ My hostname will be `rachel.nifi.com`.
 ```bash
 kubectl create namespace nifi
 ```
+
 2. Create secret with `tls.key` and `tls.cert`.
 ```
 openssl genrsa -out tls.key 2048
@@ -178,6 +188,7 @@ openssl req -new -x509 -key tls.key -out tls.cert -days 360 -subj "/CN=rachel.ni
 
 kubectl create secret tls tls-secret --cert=tls.cert --key=tls.key -n nifi
 ```
+
 Remarks: If `openssl.cnf` is not available, you can download a sample OpenSSL configuration file from [OpenSSL GitHub](https://github.com/openssl/openssl/blob/master/apps/openssl.cnf) and add the configuration file using `-config` flag.
 ```
 openssl req -new -x509 -key tls.key -out tls_r.cert -days 360 -subj "/CN=rachel.nifi.com" -config folder/to/openssl.cnf
@@ -199,6 +210,7 @@ kubectl -n nifi logs nifi-0 --tail 50
 ![](images/06_nifi_pod.png)
 
 From Nifi pod logs:
+
 ![](images/07_nifi_credentials.png)
 
 5. Get the DNS name of the ingress (ALB) and check for the public IPs of the ALB. 
@@ -207,17 +219,20 @@ kubectl get ingress -n nifi
 
 nslookup k8s-nifi-xxxxx-xxxxx-xxxxx.ap-northeast-2.elb.amazonaws.com
 ```
+
 ![](images/08_nifi_ingress.png)
 Let say the public IPs are 12.34.56.78 and 22.34.56.78 from `nslookup` output.
 Copy the IPs and the Nifi hostname to the local hosts file (located at `/etc/hosts` for mac)
 ```bash
 sudo vi /etc/hosts
 ```
+
 - add below in /etc/hosts
 ```
 12.34.56.78 rachel.nifi.com
 22.34.56.78 rachel.nifi.com
 ```
+
 6. @AWS console, check out the `Load Balancers` page. (we have implemented the load balancer for nifi in step 3.)
 - make sure listener has included `443`
 - Edit listener `443` -> routing actions select `Return fixed response`->  Certificate source choose `import certificate`->  `import to ACM` option -> paste `tls.key` to Certificate private key and paste `tls.cert` to Certificate body.
@@ -238,32 +253,38 @@ https://rachel.nifi.com/nifi
 Since the introduction of _Kraft_, Zookeeper is no longer required as Kafka nodes can also handle cluster coordination and control natively. In the Kraft mode, the Kafka cluster will consist only of Kafka nodes. But they have different roles — either _controllers, or brokers, or a combination of both._
 
 Taking reference from this AWS [blog](https://aws.amazon.com/blogs/containers/harnessing-karpenter-transitioning-kafka-to-amazon-eks-with-aws-solutions/), I am trying to deploy Strimzi Kafka Operator and Redpanda-Console in this exercise. 
+
 ### Why Strimzi?
 [Strimzi ](https://strimzi.io/docs/operators/latest/overview#kafka_capabilities) is an open-source project aims to simplify the process of running [Apache Kafka](https://kafka.apache.org/) within a Kubernetes cluster.
+
 ### Components to implement
 1. **Strimzi Kafka Operator** - open-source Kubernetes Operator that simplifies the deployment, management, and operation of Apache Kafka clusters on Kubernetes.
 2. **Kafka Cluster (Kraft)** - 2 custom resources will be deployed: KafkaNodePool and Kafka with Kraft enabled.
 3. **Kafka Connect** - a framework included in the Apache Kafka ecosystem that provides scalable and reliable data import and export capabilities for Apache Kafka.
 4. **Kafka Connector** - can be either Source connectors that push data into Kafka or Sink connectors that extract data out of Kafka. We will use Snowflake Sink Connector.
-5. **Redpanda Console** - user-interface (UI) to manage all Kafka ecosystem modules including brokers, topics, consumers, connectors, users and access in real-time. 
+5. **Redpanda Console** - user-interface (UI) to manage all Kafka ecosystem modules including brokers, topics, consumers, connectors, users and access in real-time.
+
 ### A. Deploy Strimzi Kafka Operator
 To start with Strimzi, we need to implement _Strimzi Kafka Operator_ first. 
 1. Create namespace for Kafka
 ```bash
 kubectl create namespace kafka
 ```
+
 2. Helm install Strimzi Kafka Operator.
 ```bash
 helm repo add strimzi https://strimzi.io/charts/  
 helm repo update
 helm install strimzi-operator strimzi/strimzi-kafka-operator -n kafka
 ```
+
 3. Check if the pods are running. You can also follow the logs of the operator.
 ```bash
 kubectl get pods -n kafka
 
 kubectl logs deployment/strimzi-cluster-operator -n kafka -f
 ```
+
 ![](images/12_kafka_operator.png)
 ---
 ### B. Deploy Kafka cluster [dual-role option]
@@ -271,6 +292,7 @@ Once the operator becomes active, we can deploy Kafka cluster. There are differe
   - _controller_: handle cluster **metadata**, including topic configurations, partitions, leader elections, and more.. In KRaft mode, the controller replaces ZooKeeper, so its role is critical for cluster management. Controllers do not handle data (messages).
   - _broker_: handle the **actual data** in the Kafka cluster, such as storing and serving messages for producers and consumers. Each broker manages a subset of partitions for the topics in the cluster. Brokers rely on controllers for metadata.
   - _number of kafka nodes to be deployed = 3_ (share the broker and controller roles)
+
 _Steps_
 1. Deploy storage class using [kafka-sc.yaml](kafka/kafka-cluster/kafka-sc.yaml).
 ```
@@ -280,38 +302,48 @@ kubectl apply -f kafka/kafka-cluster/kafka-sc.yaml
 ```
 kubectl apply -f kafka/kafka-cluster/kafka-with-dual-role-nodes.yaml
 ```
+
 3. check status of pods
 ```
 kubectl get pods -w -n kafka
 ```
 ![](images/13_kafka_cluster.png)
+
 4. You can also check the custom resources status.
-	- number of nodes: 3
-	- roles: controller, broker
+- number of nodes: 3
+- roles: controller, broker
+
 ```
 kubectl get kafka -n kafka
 kubectl get kafkanodepool -n kafka
 ```
+
 ![](images/14_kafka_kafka.png)
 ![](images/15_kafka_kafkanodepool.png)
+
 5. Check the service name. The service name of the bootstrap server is  `my-cluster-kafka-bootstrap`, which is designed to provide a single endpoint for Kafka clients to connect to the cluster.
 ```bash
 kubectl get svc -n kafka
 ```
+
 ![](images/16_kafka_svc.png)
  => The full url to call the bootstrap server is:
  `my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092`
+ 
 6. Test if the Kafka cluster is working properly.
+   
 _enter the Kafka container_
 ```bash
 kubectl -n kafka exec -it  my-cluster-dual-role-0  -- bash
 ```
+
 _test producer_
 - (inside container) Produce message and create topic `my-topic` in the meanwhile if not already create
 ```bash
 bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 ```
 - Type in any message to send through `my-topic`
+
 _test consumer_
  - (in new kafka shell) Consume message from `my-topic`
 ```bash
@@ -319,17 +351,22 @@ kubectl -n kafka exec -it  my-cluster-dual-role-0  -- bash
 
 bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --from-beginning
 ```
+
 _create topic_
 - (inside kafka shell) Create topic named `stock` and create 3 replicas for fault tolerance 
 ```bash
 bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --create --topic stock --partitions 3 --replication-factor 3
 ```
+
 ![](images/17_kafka_create_topic.png)
+
 _describe topic_
+
 - (within kafka shell) to check the partition/leader/replicas info of the topic `stock`
 ```
 bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic stock
 ```
+
 ![](images/18_kafka_describe_topic.png)
 ---
 ### C. Deploy Kafka Connect
@@ -348,6 +385,7 @@ _Steps_
 	}
 }
 ```
+
 _note:_ follow this guide to create the `dockerconfig.json`: 
 https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 
@@ -357,6 +395,7 @@ kubectl -n kafka create secret generic my-docker-secret \
     --from-file=.dockerconfigjson=kafka/kafka-connect/dockerconfig.json \
     --type=kubernetes.io/dockerconfigjson
 ```
+
 - verify if the secret is correct (return `.dockerconfigjson` contents)
 ```bash
 kubectl -n kafka get secret my-docker-secret --output="jsonpath={.data.\.dockerconfigjson}" | base64 --decode
@@ -372,6 +411,7 @@ config:
   config.providers.secrets.class:io.strimzi.kafka.KubernetesSecretConfigProvider
 # ...
 ```
+
 - bake custom Kafka connect image:
 	- give the image name: `docker.io/<username>/<private_repo_name>:<tag_version>`
 	- `pushSecret` is the secret to access the private container registry.
@@ -393,7 +433,9 @@ config:
 ```bash
 kubectl apply -f kafka/kafka-connect/kafka-connect.yaml
 ```
+
 - ref: https://github.com/strimzi/strimzi-kafka-operator/blob/main/examples/connect/kafka-connect.yaml
+
 6. Check pod status.
    Strimzi will first spin-up a Kafka Connect build pod `my-connect-cluster-connect-build` , and when the build is finished a regular Kafka Connect pod `my-connect-cluster-connect-0` is created.
 ```bash
@@ -409,16 +451,19 @@ kubectl logs -l strimzi.io/kind=KafkaConnect -n kafka
 
 kubectl get events -n kafka
 ```
+
 8. When you deploy the Kafka Connect cluster, Strimzi will automatically create a Service Account for it. It will be named `<KafkaConnect-name>-connect`.
 ```
 kubectl get sa -n kafka
 ```
 ![](images/20_kafka_sa.png)
+
 ---
 ### D. Set up Snowflake objects
 We need to create user `kafka_user` for Kafka connector in snowflake. The authentication method is key-pair authentication. The public key will be saved in snowflake while the private key will be used by Kafka connector to authenticate with snowflake. 
 _Steps_
 1. Create the required objects @snowflake using [snowflake_privileges.sql](snowflake/snowflake_privileges.sql).
+
 2. Generate private key `rsa_key.p8`@terminal (without password encryption).
 ```bash
 openssl genrsa 4096 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
@@ -442,6 +487,7 @@ ALTER USER kafka_user SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
 ```
 desc user kafka_user;
 ```
+
 ![](images/21_snowflake_kafka_user.png)
 ---
 ### E. Deploy Kafka Connector
@@ -451,6 +497,7 @@ In the `KafkaConnector`  configuration, we can use any of the connectors that w
 PRVK=`cat ./rsa_key.p8 | grep -v KEY- | tr -d '\012'`
 echo "private_key=$PRVK"
 ```
+
 2. Create secret `snowflake-credentials`  using [kafka-secert.yaml](kafka/kafka-connector/kafka-secret.yaml) (edit with the private key output).
 ```
 kubectl apply -f kafka/kafka-connector/kafka-secret.yaml
@@ -463,6 +510,7 @@ ref: https://docs.snowflake.com/en/user-guide/kafka-connector-install#label-kafk
 kubectl get secret snowflake-credentials -n kafka
 kubectl describe secret snowflake-credentials -n kafka
 ```
+
 ![](images/22_snowflake_secret.png)
 
 4. Create a role for connector using [kafka-connector-role.yaml](kafka/kafka-connector/kafka-connector-role.yaml).
@@ -477,6 +525,7 @@ kubectl apply -f kafka/kafka-connector/kafka-connector-role.yaml
    - The Role Binding should be created in the namespace where the Secret or Config Maps which we want to read exists.
    - In the `subjects` section, we need to specify the name of the Service Account used by the Kafka Connect Pods and the namespace where the Kafka Connect cluster is deployed. (will use the autogenerated service account by Strimzi - `my-connect-cluster-connect`)
    - If you want to consume Secrets or Config Maps from multiple namespace, you need to create multiple Roles and Role Bindings - each in the corresponding namespace.
+
 ```
 kubectl apply -f kafka/kafka-connector/kafka-connector-rolebinding.yaml
 ```
@@ -493,6 +542,7 @@ config:
 ```
 kubectl apply -f kafka/kafka-connector/kafka-connector.yaml
 ```
+
 _note:_ The RBAC resources are applied on the Pod level. So the Secret will be accessible to all connectors running in the same Kafka Connect cluster and not just to this particular connector.
 
 8. Verify if the connector running:
@@ -501,6 +551,7 @@ kubectl get kafkaconnector -n kafka
 
 kubectl logs -l strimzi.io/cluster=my-connect-cluster -n kafka
 ```
+
 ![](images/23_kafka_kafkaconnector.png)
 ---
 ### F. Deploy Redpanda Console
@@ -536,13 +587,15 @@ kubectl -n redpanda get ingress
 ```
 ![](images/25_redpanda_ingress.png)
 
-6. find the IP and add the IP to local host file `/etc/hosts`
+6. find the IP and add the IP to local host file `/etc/hosts`.
 ```
 nslookup xxx
 
 sudo vi /etc/hosts
 ```
+
 - @hosts file, add below.
+
 ```
 12.34.56.78 rachel.redpanda.com
 22.34.56.78 rachel.redpanda.com
@@ -608,16 +661,18 @@ https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources
    - interval: 1d
    - range: 1mo
    - ticker: GOOG
+     
 ![](images/29_nifi_api_params.png)
 
 4. Go to processor group `publish-to-kafka`, then to the processor `PublishKafkaRecord_2_0`, configure _Properties_ tab and update the followings:
-- Kafka Brokers:
-```
-my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
-```
-- Topic Name: stock
-- Record Reader: JsonTreeReader -> controller services: set to _Enabled_ state
-- Record Writer: JsonRecordSetWriter  -> controller services: set to _Enabled_ state
+
+	- Kafka Brokers:
+	```
+	my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+	```
+	- Topic Name: stock
+	- Record Reader: JsonTreeReader -> controller services: set to _Enabled_ state
+	- Record Writer: JsonRecordSetWriter  -> controller services: set to _Enabled_ state
 
 5. Start the 2 processor groups
    - Invoke-https-yfinance
@@ -628,6 +683,7 @@ my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
    - data flow:
 	Yahoo Finance API -> Nifi -> Kafka -> Snowflake
    - snowflake queries:
+
 ```
 use role engineer;
 use warehouse stock_wh;
@@ -636,6 +692,7 @@ use schema raw;
 
 select * from TICKERS_KAFKA_STREAMING;
 ```
+
 _note:_ table `TICKERS_KAFKA_STREAMING` is auto created by the Kafka connector. Table name is defined in the `KafkaConnector` configuration [kafka-connector.yaml](kafka/kafka-connector/kafka-connector.yaml).
 ![](images/31_snowflake_data.png)
 
@@ -644,12 +701,14 @@ _note:_ table `TICKERS_KAFKA_STREAMING` is auto created by the Kafka connector. 
 
 ---
 # Part 6 - Cleanup
+
 1. As a final step, clean up all the resources built in this exercise. 
 ```
 kubectl delete svc,sts,pvc,sc,ingress,sa,secret --all -n nifi
 kubectl delete svc,deploy,sts,pvc,sc,sa,KafkaNodePool,kafka,kafkaconnect,kafkaconnector,secret --all -n kafka
 kubectl delete svc,deploy,sts,pvc,sc,sa,ingress,secret --all -n redpanda
 ```
+
 2. Verify if all the resources are deleted as well.
 ```
 kubectl get all -A
@@ -658,11 +717,13 @@ kubectl get sc -A
 kubectl get ingress -A
 kubectl get svc -A
 ```
+
 3. Helm uninstall controllers
 ```
 helm uninstall aws-ebs-csi-driver --namespace kube-system
 helm uninstall aws-load-balancer-controller --namespace kube-system
 ```
+
 4. Remove the Cloudformation stacks.
 ```
 aws cloudformation delete-stack --stack-name MyPrivateNodeGroupStack
@@ -672,6 +733,7 @@ aws cloudformation delete-stack --stack-name eksctl-MyEKSCluster-addon-iamservic
 
 aws cloudformation delete-stack --stack-name eksctl-MyEKSCluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller
 ```
+
 5. Verify if all objects are deleted @aws console. 
 	- Cloudformation stacks
 	- EBS volume
@@ -684,7 +746,7 @@ Just some ideas to continue the exercise with below.
 1. Backtesting using the stock data on snowflake to simulate buy/sell actions in order to estimate the potential profit on each stock
 2. Make use of other Strimzi components to optimize the whole pipeline
 3. Apply better security/RBAC control on the whole setup. How to streamline the authentication process?
-   
+
 ### References
 - https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html
 - https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html
