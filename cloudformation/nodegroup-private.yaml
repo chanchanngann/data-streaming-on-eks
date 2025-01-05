@@ -52,7 +52,7 @@ Parameters:
   NodeVolumeSize:
     Type: Number
     Description: Worker Node volume size
-    Default: 20
+    Default: 10
  
   NodeVolumeType:
     Type: String

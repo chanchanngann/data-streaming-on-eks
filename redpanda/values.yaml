@@ -151,18 +151,18 @@ console:
         # password:  # set via Helm secret / Env variable
       tls:
         enabled: false #true
-    # connect:
-    #   enabled: true
-    #   clusters:
-    #     # - name: datawarehouse # Required field, will be used as identifier in the frontend
-    #     #   url: http://dwh-connect.mycompany.com:8083
-    #     #   tls:
-    #     #     enabled: false # Trusted certs are still allowed by default
-    #     #   username: admin
-    #     #   # password: # Set using flag --connect.clusters.0.password=secret
-    #     - name: my-connect-cluster # Required field, will be used as identifier in the frontend
-    #       url: http://analytics.mycompany.com:8083
-    #       # No auth configured on that cluster, hence no username/password set
+    connect:
+      enabled: true
+      clusters:
+        # - name: datawarehouse # Required field, will be used as identifier in the frontend
+        #   url: http://dwh-connect.mycompany.com:8083
+        #   tls:
+        #     enabled: false # Trusted certs are still allowed by default
+        #   username: admin
+        #   # password: # Set using flag --connect.clusters.0.password=secret
+        - name: my-cluster-connect-api # Required field, will be used as identifier in the frontend
+          url: my-cluster-connect-api.kafka.svc.cluster.local:8083
+          # No auth configured on that cluster, hence no username/password set
   # roles:
   # roleBindings:
 
