@@ -2,6 +2,9 @@
 # Intro
 This exercise focuses on building a robust data streaming pipeline deployed on Kubernetes using AWS EKS. The pipeline integrates multiple components to enable real-time data ingestion, processing, and analytics, specifically tailored for stock market data streaming:
 
+Data flow:
+ ![](images/01_flow.png)
+ 
 - **[Nifi](#user-content-part-3---nifi)**: Extracts stock data from the Yahoo Finance API at 1-second intervals and streams it to a Kafka topic for real-time processing.
 - **[Kafka(Strimzi)](#user-content-part-4---kafka)**: A distributed and decoupled event streaming platform designed for high-throughput, fault-tolerant data ingestion and real-time analytics.
 - **[Kafka Connect(Strimzi)](#user-content-c-deploy-kafka-connect)**: Facilitates seamless integration between Kafka and external systems, enabling efficient data ingestion and export through pre-built or custom connectors.
@@ -10,10 +13,6 @@ This exercise focuses on building a robust data streaming pipeline deployed on K
 - **[Snowflake](#user-content-part-5---write-to-snowflake)**: A cloud-native data platform that provides scalable, secure, and high-performance capabilities for data warehousing, analytics, and sharing.
 # Architecture
 
-Data flow:
- ![](images/01_flow.png)
-
-AWS building blocks:
  ![](images/02_flow.png)
 
 **VPC:**
