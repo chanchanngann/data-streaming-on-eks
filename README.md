@@ -69,11 +69,11 @@ aws eks update-kubeconfig --region ap-northeast-2 --name MyEKSCluster
 
 5. To enable the nodes to join the cluster, prepare an aws-auth ConfigMap. Download [aws-auth-cm.yaml](auth/aws-auth-cm.yaml) from aws and replace the `rolearn` value with the `NodeGroupRole Arn` value obtained from Cloudformation output (MyPrivateNodeGroupStack). Then check and wait until the nodes are ready.
 
-- download `aws_auth-cm-yaml` template from aws. 
+- download `aws_auth-cm.yaml` template from aws. 
 ```bash
 curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/cloudformation/2020-10-29/aws-auth-cm.yaml
 ```
-- edit `aws_auth-cm-yaml` and apply.
+- edit `aws_auth-cm.yaml` and apply.
 ```bash
 kubectl apply -f project_folder/auth/aws-auth-cm.yaml
 
@@ -107,7 +107,7 @@ helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver --namespac
 ```
 
 ### AWS Load Balancer Controller
-The controller manages AWS Elastic Load Balancers for the Kubernetes cluster. We need this controller to help create ALB so that nifi can be accessed via ingress entry.
+The controller manages AWS Elastic Load Balancers for the Kubernetes cluster. We need this controller to help create ALB so that nifi and redpanda-console can be accessed via ingress.
 
 1. Create OIDC (can skip since we have created the OIDC in CSI Driver section.)
 ```bash
@@ -115,7 +115,6 @@ eksctl utils associate-iam-oidc-provider --cluster MyEKSCluster --approve
 ```
 
 2. Download & create IAM policy required for the load balancer controller to interact with AWS.
-   (Go to [Troubleshoot](#user-content-troubleshoot) section, there are missing policies in the AWS provided policy.)
 ```bash
 curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
 
@@ -124,8 +123,7 @@ aws iam create-policy \
 --policy-document file://project_folder/auth/iam_policy.json
 ```
 
-This is the edited version: [iam_policy.json](auth/iam_policy.json).
-After creating the IAM policy, copy the policy ARN of `AWSLoadBalancerControllerIAMPolicy` from AWS IAM.
+This is the edited version: [iam_policy.json](auth/iam_policy.json). Go to [Troubleshoot](#user-content-troubleshoot) section for details, there are missing policies in the AWS provided policy. After creating the IAM policy, copy the policy ARN of `AWSLoadBalancerControllerIAMPolicy` from AWS IAM.
 
 3. Create service account. The `eksctl` command will create service account `aws-load-balancer-controller` and IAM role `AmazonEKSLoadBalancerControllerRole`. The service account will be linked with the IAM role, containing the IAM policy `AWSLoadBalancerControllerIAMPolicy`(copy the policy ARN from AWS IAM). Check the cloudformation stack `eksctl-MyEKSCluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller`.
 
@@ -133,7 +131,7 @@ After creating the IAM policy, copy the policy ARN of `AWSLoadBalancerController
 eksctl create iamserviceaccount  --cluster=MyEKSCluster --namespace=kube-system --name=aws-load-balancer-controller  --role-name AmazonEKSLoadBalancerControllerRole  --attach-policy-arn=arn:aws:iam::xxxxxxxx:policy/AWSLoadBalancerControllerIAMPolicy  --approve  
 ```
 
-4. Wait until the service account is ready. Then helm install aws-load-balancer-controller
+4. Wait until the service account is ready. Then helm install aws-load-balancer-controller.
 ```bash
 helm repo add eks https://aws.github.io/eks-charts
 
@@ -151,15 +149,15 @@ kubectl get deployment -n kube-system
 ---
 ### Troubleshoot
 
-##### issue # 1
+### issue # 1
 
-_What:_ Failed during `helm install aws-load-balancer-controller...` 
+**What:** Failed during `helm install aws-load-balancer-controller...` 
 
-_Why:_ Permission error: Missing IAM policies for Load Balancer Controller service account.
+**Why:** Permission error: Missing IAM policies for Load Balancer Controller service account.
 ```
 Failed deploy model due to operation error Elastic Load Balancing v2: DescribeListenerAttributes, https response error StatusCode: 403, RequestID: xxxxx-xxx-xxx-xxx-xxxx, api error AccessDenied: User: arn:aws:sts::xxxxxxxx:assumed-role/AmazonEKSLoadBalancerControllerRole/xxxxxxxxxx is not authorized to perform: elasticloadbalancing:DescribeListenerAttributes because no identity-based policy allows the elasticloadbalancing:DescribeListenerAttributes action
 ```
-_How to solve:_ 
+**How to solve:**
 This seems a bug (not sure). You need to add the following policies to `iam_policy.json` , then recreate the IAM policy and service account `aws-load-balancer-controller`.
 ```
 Action:
@@ -180,7 +178,7 @@ My hostname will be `rachel.nifi.com`.
 kubectl create namespace nifi
 ```
 
-2. Create secret with `tls.key` and `tls.cert`.
+2. Create secret using `tls.key` and `tls.cert`.
 ```
 openssl genrsa -out tls.key 2048
 
@@ -194,7 +192,7 @@ Remarks: If `openssl.cnf` is not available, you can download a sample OpenSSL co
 openssl req -new -x509 -key tls.key -out tls_r.cert -days 360 -subj "/CN=rachel.nifi.com" -config folder/to/openssl.cnf
 ```
 
-3. Create the essential objects: statefulset, service, pvc, sc, ingress.
+3. Create the essential objects: statefulset, service, pvc, sc, sa, ingress.
 ```
 kubectl apply -f nifi/
 ```
@@ -265,7 +263,7 @@ Taking reference from this AWS [blog](https://aws.amazon.com/blogs/containers/ha
 5. **Redpanda Console** - user-interface (UI) to manage all Kafka ecosystem modules including brokers, topics, consumers, connectors, users and access in real-time.
 
 ### A. Deploy Strimzi Kafka Operator
-To start with Strimzi, we need to implement _Strimzi Kafka Operator_ first. 
+To use Strimzi, we need to implement _Strimzi Kafka Operator_ first. 
 1. Create namespace for Kafka
 ```bash
 kubectl create namespace kafka
@@ -278,7 +276,7 @@ helm repo update
 helm install strimzi-operator strimzi/strimzi-kafka-operator -n kafka
 ```
 
-3. Check if the pods are running. You can also follow the logs of the operator.
+3. Check if the pods are running. You can also check the logs of the operator.
 ```bash
 kubectl get pods -n kafka
 
@@ -303,15 +301,15 @@ kubectl apply -f kafka/kafka-cluster/kafka-sc.yaml
 kubectl apply -f kafka/kafka-cluster/kafka-with-dual-role-nodes.yaml
 ```
 
-3. check status of pods
+3. Verify if the pods are deployed properly.
 ```
 kubectl get pods -w -n kafka
 ```
 ![](images/13_kafka_cluster.png)
 
 4. You can also check the custom resources status.
-- number of nodes: 3
-- roles: controller, broker
+	- number of nodes: 3
+	- roles: controller, broker
 
 ```
 kubectl get kafka -n kafka
@@ -332,19 +330,19 @@ kubectl get svc -n kafka
  
 6. Test if the Kafka cluster is working properly.
    
-_enter the Kafka container_
+**enter the Kafka container**
 ```bash
 kubectl -n kafka exec -it  my-cluster-dual-role-0  -- bash
 ```
 
-_test producer_
-- (inside container) Produce message and create topic `my-topic` in the meanwhile if not already create
+**test producer**
+- (inside container) Produce message and create topic `my-topic` in the meanwhile if not already create.
 ```bash
 bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 ```
-- Type in any message to send through `my-topic`
+- Type in any message to send through `my-topic`.
 
-_test consumer_
+**test consumer**
  - (in new kafka shell) Consume message from `my-topic`
 ```bash
 kubectl -n kafka exec -it  my-cluster-dual-role-0  -- bash
@@ -352,17 +350,17 @@ kubectl -n kafka exec -it  my-cluster-dual-role-0  -- bash
 bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --from-beginning
 ```
 
-_create topic_
-- (inside kafka shell) Create topic named `stock` and create 3 replicas for fault tolerance 
+**create topic**
+- (inside kafka shell) Create topic named `stock` and create 3 replicas for fault tolerance. 
 ```bash
 bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --create --topic stock --partitions 3 --replication-factor 3
 ```
 
 ![](images/17_kafka_create_topic.png)
 
-_describe topic_
+**describe topic**
 
-- (within kafka shell) to check the partition/leader/replicas info of the topic `stock`
+- (inside kafka shell) to check the partition/leader/replicas info of the topic `stock`
 ```
 bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic stock
 ```
@@ -370,12 +368,13 @@ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describ
 ![](images/18_kafka_describe_topic.png)
 ---
 ### C. Deploy Kafka Connect
-In `KafkaConnect` resource, we can enable connectors by following the steps below.
+In `KafkaConnect` resource, we can enable connectors by:
 - add  `strimzi.io/use-connector-resources` annotation.  
 - add a `build` configuration so that Strimzi automatically builds a container image with the connector plugins you require for your data connections.
+
 _Steps_
 1. Create private repo at docker hub.
-2. Create a file [dockerconfig.json](kafka/kafka-connect/dockerconfig.json) containing encoded username and password.
+2. Create a file [dockerconfig.json](kafka/kafka-connect/dockerconfig.json) containing encoded credentials to pull images from the private container registry.
 ```JSON
 {
 	"auths": {
@@ -389,19 +388,19 @@ _Steps_
 _note:_ follow this guide to create the `dockerconfig.json`: 
 https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 
-3. Create Secret which contains the credentials to pull images from the private container registry.
+3. Create Secret from `dockerconfig.json`.
 ```shell
 kubectl -n kafka create secret generic my-docker-secret \
     --from-file=.dockerconfigjson=kafka/kafka-connect/dockerconfig.json \
     --type=kubernetes.io/dockerconfigjson
 ```
 
-- verify if the secret is correct (return `.dockerconfigjson` contents)
+4. verify if the secret is correct (return `.dockerconfigjson` contents)
 ```bash
 kubectl -n kafka get secret my-docker-secret --output="jsonpath={.data.\.dockerconfigjson}" | base64 --decode
 ```
 
-4. In the `KafkaConnect` configuration file:
+5. In the `KafkaConnect` configuration file:
 - initialize the configuration providers (we need this for Kafka connector part)
 ```
 spec: # ... 
@@ -414,7 +413,7 @@ config:
 
 - bake custom Kafka connect image:
 	- give the image name: `docker.io/<username>/<private_repo_name>:<tag_version>`
-	- `pushSecret` is the secret to access the private container registry.
+	- `pushSecret` is the secret to access the private container registry (i.e. `my-docker-secret` created in previous step).
 	- put the download link of snowflake-kafka-connector in the `url` part. (check if the connector version is compatible with the installed Kafka version from snowflake doc)
 ```
   build:
@@ -429,21 +428,21 @@ config:
           url: https://repo1.maven.org/maven2/com/snowflake/snowflake-kafka-connector/2.5.0/snowflake-kafka-connector-2.5.0.jar
 ```
 
-5. deploy `kafkaconnect` using [kafka-connect.yaml](kafka/kafka-connect/kafka-connect.yaml).
+6. deploy `kafkaconnect` using [kafka-connect.yaml](kafka/kafka-connect/kafka-connect.yaml).
 ```bash
 kubectl apply -f kafka/kafka-connect/kafka-connect.yaml
 ```
 
 - ref: https://github.com/strimzi/strimzi-kafka-operator/blob/main/examples/connect/kafka-connect.yaml
 
-6. Check pod status.
+7. Check the pod status.
    Strimzi will first spin-up a Kafka Connect build pod `my-connect-cluster-connect-build` , and when the build is finished a regular Kafka Connect pod `my-connect-cluster-connect-0` is created.
 ```bash
 kubectl get pod -n kafka
 ```
 ![](images/19_kafka_kafkaconnect.png)
 
-7. If failed to deploy, check the Kafka Connect logs to debug.
+8. If failed to deploy `kafkaconnect`, check the KafkaConnect logs to debug.
 ```bash
 kubectl describe kafkaconnect my-connect-cluster -n kafka
 
@@ -452,7 +451,7 @@ kubectl logs -l strimzi.io/kind=KafkaConnect -n kafka
 kubectl get events -n kafka
 ```
 
-8. When you deploy the Kafka Connect cluster, Strimzi will automatically create a Service Account for it. It will be named `<KafkaConnect-name>-connect`.
+9. When you deploy the Kafka Connect cluster, Strimzi will automatically create a Service Account for it. It will be named `<KafkaConnect-name>-connect`.
 ```
 kubectl get sa -n kafka
 ```
@@ -460,7 +459,8 @@ kubectl get sa -n kafka
 
 ---
 ### D. Set up Snowflake objects
-We need to create user `kafka_user` for Kafka connector in snowflake. The authentication method is key-pair authentication. The public key will be saved in snowflake while the private key will be used by Kafka connector to authenticate with snowflake. 
+We need to create user `kafka_user` for Kafka connector in snowflake. The authentication method for this user should be key-pair authentication. The _public key_ will be saved in snowflake while the _private key_ will be used by Kafka connector to authenticate with snowflake. 
+
 _Steps_
 1. Create the required objects @snowflake using [snowflake_privileges.sql](snowflake/snowflake_privileges.sql).
 
@@ -469,7 +469,7 @@ _Steps_
 openssl genrsa 4096 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
 ```
 
-3. Generate the public key `rsa_key.pub` based on the previous private key.
+3. Generate public key `rsa_key.pub` based on the previous private key.
 ```bash
 openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
 
@@ -477,13 +477,13 @@ PUBK=`cat ./rsa_key.pub | grep -v KEY- | tr -d '\012'`
 echo "ALTER USER kafka_user SET RSA_PUBLIC_KEY='$PUBK';"
 ```
 
-4. Get the public key from output above OR open `rsa_key.pub` and copy the string in a single character chain. Then assign the public key to user `kafka_user` @snowflake.
+4. Get the public key from output above OR open `rsa_key.pub` and copy the string in a single character chain. Then set the public key to user `kafka_user` @snowflake.
 ```sql
 use role useradmin;
 ALTER USER kafka_user SET RSA_PUBLIC_KEY='MIIBIjANBgkqh...';
 ```
 
-5. Verify if the public key is assigned to `kafka_user` @snowflake.
+5. Verify if the public key is properly set up for `kafka_user` @snowflake.
 ```
 desc user kafka_user;
 ```
@@ -491,14 +491,14 @@ desc user kafka_user;
 ![](images/21_snowflake_kafka_user.png)
 ---
 ### E. Deploy Kafka Connector
-In the `KafkaConnector`  configuration, we can use any of the connectors that we added to the build section in `KafkaConnect`  configuration. In our case, we will add the snowflake kafka connector.
+In the `KafkaConnector`  configuration, we can use any of the connectors that we added to the build section in `KafkaConnect`  configuration. In our case, we will add the _snowflake kafka connector_.
 1. Get the private key for `kafka_user` by running below command.
 ```bash
 PRVK=`cat ./rsa_key.p8 | grep -v KEY- | tr -d '\012'`
 echo "private_key=$PRVK"
 ```
 
-2. Create secret `snowflake-credentials`  using [kafka-secert.yaml](kafka/kafka-connector/kafka-secret.yaml) (edit with the private key output).
+2. Create secret `snowflake-credentials`  using [kafka-secert.yaml](kafka/kafka-connector/kafka-secret.yaml) (edit the access url and the private key).
 ```
 kubectl apply -f kafka/kafka-connector/kafka-secret.yaml
 ```
@@ -513,7 +513,7 @@ kubectl describe secret snowflake-credentials -n kafka
 
 ![](images/22_snowflake_secret.png)
 
-4. Create a role for connector using [kafka-connector-role.yaml](kafka/kafka-connector/kafka-connector-role.yaml).
+4. Create a Role for connector `connector-configuration-role` using [kafka-connector-role.yaml](kafka/kafka-connector/kafka-connector-role.yaml).
    - This Role has to be created in the namespace where the Secret or Config Map (`snowflake-credentials`) we want to use exists.
    - The only operation this Role allows is `get` to read the Secret `snowflake-credentials`.
    - So that the configuration provider with this Role will not be able to modify the secret or read any other secrets.
@@ -521,16 +521,16 @@ kubectl describe secret snowflake-credentials -n kafka
 kubectl apply -f kafka/kafka-connector/kafka-connector-role.yaml
 ```
 
-5. Create a Role Binding using [kafka-connector-rolebinding.yaml](kafka/kafka-connector/kafka-connector-rolebinding.yaml) to assign this Role to the Kafka Connect Pods:
+5. Create a Role Binding using [kafka-connector-rolebinding.yaml](kafka/kafka-connector/kafka-connector-rolebinding.yaml) to assign the Role `connector-configuration-role` to the Kafka Connect Pods:
    - The Role Binding should be created in the namespace where the Secret or Config Maps which we want to read exists.
-   - In the `subjects` section, we need to specify the name of the Service Account used by the Kafka Connect Pods and the namespace where the Kafka Connect cluster is deployed. (will use the autogenerated service account by Strimzi - `my-connect-cluster-connect`)
+   - In the `subjects` section, we need to specify the name of the Service Account used by the Kafka Connect Pods and the namespace where the Kafka Connect cluster is deployed. (will use the service account auto-generated by Strimzi - `my-connect-cluster-connect`)
    - If you want to consume Secrets or Config Maps from multiple namespace, you need to create multiple Roles and Role Bindings - each in the corresponding namespace.
 
 ```
 kubectl apply -f kafka/kafka-connector/kafka-connector-rolebinding.yaml
 ```
 
-6. Include following in `KafkaConnector`  configuration. `secrets` is the provider name, `kafka` is namesapce, `snowflake-credentials` is secret name, `username`/`url`/`private_key` is the field in secret we want to get.
+6. Include the followings in `KafkaConnector`  configuration. `secrets` is the provider name, `kafka` is the namesapce, `snowflake-credentials` is the secret name, `username`/`url`/`private_key` are the fields in secret we want.
 ```
 config:
     snowflake.url.name: ${secrets:kafka/snowflake-credentials:url} 
@@ -545,7 +545,7 @@ kubectl apply -f kafka/kafka-connector/kafka-connector.yaml
 
 _note:_ The RBAC resources are applied on the Pod level. So the Secret will be accessible to all connectors running in the same Kafka Connect cluster and not just to this particular connector.
 
-8. Verify if the connector running:
+8. Verify if the connector is running properly.
 ```
 kubectl get kafkaconnector -n kafka
 
@@ -555,25 +555,27 @@ kubectl logs -l strimzi.io/cluster=my-connect-cluster -n kafka
 ![](images/23_kafka_kafkaconnector.png)
 ---
 ### F. Deploy Redpanda Console
-1. download `values.yaml` from the link below
+1. download `values.yaml` from the link below.
+
 https://github.com/redpanda-data/helm-charts/blob/main/charts/console/values.yaml
 
 2. Edit `values.yaml`
    - correct broker endpoints
-```
-kafka:
-	brokers:
-		- my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
-```
-   - update service part
-   - update ingress part
+	```
+	kafka:
+	  brokers:
+	    - my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092
+	```
+ 
+   - update `service` part
+   - update `ingress` part
 
-3. create namespace
+3. Create namespace
 ```bash
 kubectl create namespace redpanda
 ```
 
-4. install redpanda-console with updated [values.yaml](redpanda/values.yaml).
+4. Install redpanda-console with the updated [values.yaml](redpanda/values.yaml).
 ```bash
 helm repo add redpanda https://charts.redpanda.com
 helm repo update
@@ -581,37 +583,37 @@ helm install redpanda-console redpanda/console -f redpanda/values.yaml -n redpan
 ```
 ![](images/24_redpanda_helm.png)
 
-5. get the ingress url
+5. Get the ingress url.
 ```bash
 kubectl -n redpanda get ingress
 ```
 ![](images/25_redpanda_ingress.png)
 
-6. find the IP and add the IP to local host file `/etc/hosts`.
+6. @AWS console, check the `Load Balancers` page. Wait until the ALB is ready.
+![](images/26_redpanda_alb.png)
+
+7. Query the IPs of the ingress and add the IPs to local hosts file `/etc/hosts`.
 ```
 nslookup xxx
 
 sudo vi /etc/hosts
 ```
 
-- @hosts file, add below.
+- @hosts file, add the IPs & the hostname.
 
 ```
 12.34.56.78 rachel.redpanda.com
 22.34.56.78 rachel.redpanda.com
 ```
 
-7. @AWS console, check the `Load Balancers` page. Wait until the ALB is ready.
-![](images/26_redpanda_alb.png)
-
-8. Access Redpanda-Console at browser.
+8. Access Redpanda-Console from Chrome browser.
 ```
 http://rachel.redpanda.com
 ```
 ![](images/27_redpanda_overview.png)
 ![](images/28_redpanda_topics.png)
 
-9. if none is showing on browser, check below.
+9. If none is showing on browser, check below.
 ```bash
 kubectl get pod -n redpanda
 
@@ -621,16 +623,16 @@ kubectl get events  -n redpanda
 ```
 ---
 ### Troubleshoot
-##### issue # 2
+### issue # 2
 
-_What:_ Failed to create Kafka cluster. 
+**What:** Failed to create Kafka cluster. 
 
-_Why:_ Error due to pvc problem. Got error message when executing `kubectl describe pod my-cluster-dual-role-0 -n kafka`.
+**Why:** Error due to pvc problem. Discovered error message when executing `kubectl describe pod my-cluster-dual-role-0 -n kafka`.
 ```
 0/3 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/3 nodes are available: 3 Preemption is not helpful for scheduling.
 ```
 
-_How to solve:_
+**How to solve:**
 1.  I tried to configure storage class and add the corresponding `class` under the `storage` section in `KafkaNodePool`  configuration.
 2.  In `KafkaNodePool` configuration file [kafka-with-dual-role-nodes.yaml](kafka/kafka-cluster/kafka-with-dual-role-nodes.yaml), correct `deleteClaim` to _true_ to match the `reclaimPolicy: Delete` field in `StorageClass` definition. (`deleteClaim` specifies if the persistent volume claim has to be deleted when the cluster is un-deployed.)
 	- **persistentVolumeReclaimPolicy**
