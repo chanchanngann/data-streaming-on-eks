@@ -5,12 +5,12 @@ This exercise focuses on building a robust data streaming pipeline deployed on K
 Data flow:
  ![](images/01_flow.png)
  
-- **[Nifi](#user-content-part-3---nifi)**: Extracts stock data from the Yahoo Finance API at 1-second intervals and streams it to a Kafka topic for real-time processing.
-- **[Kafka(Strimzi)](#user-content-part-4---kafka)**: A distributed and decoupled event streaming platform designed for high-throughput, fault-tolerant data ingestion and real-time analytics.
-- **[Kafka Connect(Strimzi)](#user-content-c-deploy-kafka-connect)**: Facilitates seamless integration between Kafka and external systems, enabling efficient data ingestion and export through pre-built or custom connectors.
-- **[Snowflake Sink Connector for Kafka](#user-content-e-deploy-kafka-connector)**: Streams data from Kafka topics into Snowflake in real time for analytics and long-term storage.
-- **[Kafka UI (Redpanda Console)](#user-content-f-deploy-redpanda-console)**: Offers an intuitive interface for monitoring and managing Kafka clusters, topics, consumer groups, and messages in real time.
-- **[Snowflake](#user-content-part-5---write-to-snowflake)**: A cloud-native data platform that provides scalable, secure, and high-performance capabilities for data warehousing, analytics, and sharing.
+- **Nifi**: Extracts stock data from the Yahoo Finance API at 1-second intervals and streams it to a Kafka topic for real-time processing.
+- **Kafka(Strimzi)**: A distributed and decoupled event streaming platform designed for high-throughput, fault-tolerant data ingestion and real-time analytics.
+- **Kafka Connect(Strimzi)**: Facilitates seamless integration between Kafka and external systems, enabling efficient data ingestion and export through pre-built or custom connectors.
+- **Snowflake Sink Connector for Kafka**: Streams data from Kafka topics into Snowflake in real time for analytics and long-term storage.
+- **Kafka UI (Redpanda Console)**: Offers an intuitive interface for monitoring and managing Kafka clusters, topics, consumer groups, and messages in real time.
+- **Snowflake**: A cloud-native data platform that provides scalable, secure, and high-performance capabilities for data warehousing, analytics, and sharing.
 # Architecture
 
  ![](images/02_flow.png)
@@ -41,6 +41,23 @@ Install the followings in advance.
 - eksctl
 - kubectl
 - helm
+
+# Index
+- **[Part 1 - EKS cluster + Private Node Group](#user-content-part-1---eks-cluster--private-node-group)**
+- **[Part 2 - EBS CSI driver and Load Balancer Controller](#user-content-part-2---ebs-csi-driver-and-load-balancer-controller)**
+- **[Part 3 - Nifi](#user-content-part-3---nifi)**
+- **[Part 4 - Kafka](#user-content-part-4---kafka)**
+	- **[A. Deploy Strimzi Kafka Operator](#user-content-a-deploy-strimzi-kafka-operator)**
+ 	- **[B. Deploy Kafka Cluster [dual-role option]](#user-content-b-deploy-kafka-cluster-dual-role-option)**	
+	- **[C. Deploy Kafka Connect](#user-content-c-deploy-kafka-connect)**
+ 	- **[D. Create Snowflake objects](#user-content-d-create-snowflake-objects)**	
+	- **[E. Deploy Snowflake Kafka Connector](#user-content-e-deploy-snowflake-kafka-connector)**
+	- **[F. Deploy Redpanda Console](#user-content-f-deploy-redpanda-console)**
+- **[Part 5 - Write to Snowflake](#user-content-part-5---write-to-snowflake)**
+- **[Part 6 - Cleanup](#user-content-part-6---cleanup)**
+- **[Follow-ups](#user-content-follow-ups)**
+
+
 
 # Part 1 - EKS cluster + Private Node Group
 
@@ -285,7 +302,7 @@ kubectl logs deployment/strimzi-cluster-operator -n kafka -f
 
 ![](images/12_kafka_operator.png)
 ---
-### B. Deploy Kafka cluster [dual-role option]
+### B. Deploy Kafka Cluster [dual-role option]
 Once the operator becomes active, we can deploy Kafka cluster. There are different options provided by Strimzi. I will go with the _dual-role_ option to deploy a Kafka cluster with one pool of nodes that _share the broker and controller roles._
   - _controller_: handle cluster **metadata**, including topic configurations, partitions, leader elections, and more.. In KRaft mode, the controller replaces ZooKeeper, so its role is critical for cluster management. Controllers do not handle data (messages).
   - _broker_: handle the **actual data** in the Kafka cluster, such as storing and serving messages for producers and consumers. Each broker manages a subset of partitions for the topics in the cluster. Brokers rely on controllers for metadata.
@@ -458,7 +475,7 @@ kubectl get sa -n kafka
 ![](images/20_kafka_sa.png)
 
 ---
-### D. Set up Snowflake objects
+### D. Create Snowflake objects
 We need to create user `kafka_user` for Kafka connector in snowflake. The authentication method for this user should be key-pair authentication. The _public key_ will be saved in snowflake while the _private key_ will be used by Kafka connector to authenticate with snowflake. 
 
 _Steps_
@@ -490,7 +507,7 @@ desc user kafka_user;
 
 ![](images/21_snowflake_kafka_user.png)
 ---
-### E. Deploy Kafka Connector
+### E. Deploy Snowflake Kafka Connector
 In the `KafkaConnector`  configuration, we can use any of the connectors that we added to the build section in `KafkaConnect`  configuration. In our case, we will add the _snowflake kafka connector_.
 1. Get the private key for `kafka_user` by running below command.
 ```bash
