@@ -655,11 +655,13 @@ https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources
 # Part 5 - Write to Snowflake
 1. @nifi UI, upload template [stock-data-streaming-chel3.xml](nifi_templates/stock-data-streaming-chel3.xml).
 
-2. @nifi UI, Add template and select the uploaded template.
-3. Go to processor group `invoke-https-yfinance`, 
-   then to the processor `GenerateFlowFile`, configure _Scheduling_ tab and update the followings.
+2. @nifi UI, Add template -> select the uploaded template `stock-data-streaming-chel3`.
+3. Go to processor group `invoke-https-yfinance`:
+
+   then navigate to the processor `GenerateFlowFile`, configure _Scheduling_ tab and update the followings.
    - Run Schedule: 1sec
-   then to the processor `Set API params`, configure _Properties_ tab and update the followings.
+   
+   then navigate to the processor `Set API params`, configure _Properties_ tab and update the followings.
    - interval: 1d
    - range: 1mo
    - ticker: GOOG
@@ -679,9 +681,10 @@ https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources
 5. Start the 2 processor groups
    - Invoke-https-yfinance
    - publish-to-kafka
+
 ![](images/30_nifi_flow.png)
 
-6. Wait for a few sec and check the data at snowflake.
+6. Wait for a few sec and check the data @[snowflake.
    - data flow:
 	Yahoo Finance API -> Nifi -> Kafka -> Snowflake
    - snowflake queries:
@@ -699,6 +702,7 @@ _note:_ table `TICKERS_KAFKA_STREAMING` is auto created by the Kafka connector. 
 ![](images/31_snowflake_data.png)
 
 7. Go to Redpanda-Console to check the messages for the topic `stock`.
+
 ![](images/32_redpanda_msg.png)
 
 ---
@@ -711,7 +715,7 @@ kubectl delete svc,deploy,sts,pvc,sc,sa,KafkaNodePool,kafka,kafkaconnect,kafkaco
 kubectl delete svc,deploy,sts,pvc,sc,sa,ingress,secret --all -n redpanda
 ```
 
-2. Verify if all the resources are deleted as well.
+2. Verify if all the resources are deleted.
 ```
 kubectl get all -A
 kubectl get pvc -A
@@ -720,7 +724,7 @@ kubectl get ingress -A
 kubectl get svc -A
 ```
 
-3. Helm uninstall controllers
+3. Helm uninstall controllers.
 ```
 helm uninstall aws-ebs-csi-driver --namespace kube-system
 helm uninstall aws-load-balancer-controller --namespace kube-system
@@ -738,16 +742,16 @@ aws cloudformation delete-stack --stack-name eksctl-MyEKSCluster-addon-iamservic
 
 5. Verify if all objects are deleted @aws console. 
 	- Cloudformation stacks
-	- EBS volume
+	- EBS volumes
 	- Load balancers
 
 ---
 # Follow-ups
 Just some ideas to continue the exercise with below.
 
-1. Backtesting using the stock data on snowflake to simulate buy/sell actions in order to estimate the potential profit on each stock
-2. Make use of other Strimzi components to optimize the whole pipeline
-3. Apply better security/RBAC control on the whole setup. How to streamline the authentication process?
+1. Backtest using stock data in Snowflake to simulate buy/sell actions and estimate potential profit for each stock.
+2. Utilize other Strimzi components to optimize the data pipeline.
+3. Improve security and RBAC (Role-Based Access Control). How can the authentication process for all components in the data pipeline be streamlined?
 
 ### References
 - https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html
